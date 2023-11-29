@@ -1,0 +1,4 @@
+Models/**/*.pth
+Models/**/*.b7
+Demo/**/**/*.wav
+Data/**/**/*.wav
