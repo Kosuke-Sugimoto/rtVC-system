@@ -8,6 +8,7 @@ import rootStyle from "./styles/root.css?url";
 import choiceButtonStyle from "./styles/choice-button.css?url";
 
 import { ChoiceButtons } from "./components/ChoiceButtons";
+import Audio from "./components/Audio";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: rootStyle },
@@ -27,7 +28,8 @@ export default function App() {
       </head>
       <body>
         <h1>変換先を選択してください</h1>
-        <ChoiceButtons />
+        {/* <ChoiceButtons /> */}
+        <Audio />
         <Scripts />
       </body>
     </html>

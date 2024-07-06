@@ -1,0 +1,44 @@
+version: '3'
+services:
+  frontend:
+    image: rtvc-fe:latest
+    build: ./frontend
+    container_name: rtvc-fe
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    tty: true
+    stdin_open: true
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - type: bind
+        source: ./frontend
+        target: /work/
+
+  backend:
+    image: rtvc-be:latest
+    build: ./backend
+    container_name: rtvc-be
+    ports:
+      - "8765:8765"
+    networks:
+      - app-network
+    tty: true
+    stdin_open: true
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      - type: bind
+        source: ./backend
+        target: /work/
+
+networks:
+  app-network:
+    driver: bridge
