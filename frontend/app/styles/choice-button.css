@@ -1,0 +1,21 @@
+#button-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    position: relative;
+}
+
+#button-icon {
+    width: 25vw;
+    height: auto;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+#selected-button-icon {
+    width: 25vw;
+    height: auto;
+    pointer-events: auto;
+    cursor: pointer;
+    border: 10px solid chocolate;
+}
