@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const Audio: React.FC = () => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [audioInput, setAudioInput] = useState<MediaStream | null>(null);
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const bufferNumRef = useRef<number>(8);
+  const bufferQueueRef = useRef<Float32Array[]>([]);
 
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8765');
@@ -19,7 +21,16 @@ const Audio: React.FC = () => {
     };
     ws.onmessage = (event) => {
       console.log('Received buffer:', event.data);
-      playAudio(event.data);
+      const bufferQueue = bufferQueueRef.current;
+      const audioData = new Float32Array(event.data.byteLength / 2);
+      const view = new DataView(event.data);
+      for (let i = 0; i < audioData.length; i++) {
+        audioData[i] = view.getInt16(i * 2, true) / 0x7FFF;
+      }
+      bufferQueue.push(audioData);
+      if (bufferQueue.length > 8) {
+        bufferQueue.shift();
+      }
     };
     setSocket(ws);
 
@@ -43,6 +54,22 @@ const Audio: React.FC = () => {
           int16Data[i] = inputData[i] * 0x7FFF;
         }
         socket.send(int16Data.buffer);
+
+        // バッファのデータを再生
+        const outputData = e.outputBuffer.getChannelData(0);
+        const bufferQueue = bufferQueueRef.current;
+        if (bufferQueue.length > 0) {
+          const audioData = bufferQueue.shift();
+          if (audioData) {
+            for (let i = 0; i < outputData.length; i++) {
+              outputData[i] = audioData[i];
+            }
+          }
+        } else {
+          for (let i = 0; i < outputData.length; i++) {
+            outputData[i] = 0;
+          }
+        }
       }
     };
 
@@ -67,25 +94,25 @@ const Audio: React.FC = () => {
       console.error('Received empty buffer');
       return;
     }
-  
+
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     let context = audioContext;
-  
+
     if (!context || context.state === 'closed') {
       context = new AudioContext();
       setAudioContext(context);
     }
-  
+
     const audioData = new Float32Array(buffer.byteLength / 2);
     const view = new DataView(buffer);
-  
+
     for (let i = 0; i < audioData.length; i++) {
       audioData[i] = view.getInt16(i * 2, true) / 0x7FFF;
     }
-  
-    const audioBuffer = context.createBuffer(1, audioData.length, 44100);
+
+    const audioBuffer = context.createBuffer(1, audioData.length, 48000);
     audioBuffer.copyToChannel(audioData, 0);
-  
+
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(context.destination);

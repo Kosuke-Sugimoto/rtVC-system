@@ -2,6 +2,8 @@ import asyncio
 import websockets
 import numpy as np
 from flask import Flask, send_from_directory
+import torch
+import soxr
 
 app = Flask(__name__, static_folder='client/build')
 
@@ -16,11 +18,32 @@ def static_proxy(path):
 async def audio_conversion(websocket, path):
     try:
         async for message in websocket:
-            audio_data = np.frombuffer(message, dtype=np.int16)
-            print(f"Received data: {audio_data}")
+            audio_data = np.frombuffer(message, dtype=np.int16).astype(np.float32)
+            inout_samplerate = 48000
+            denoise_samplerate = 16000
+            inter_samplerate = inout_samplerate // 2
 
-            # 音声変換処理（例：単純な増幅）
-            converted_audio_data = audio_data * 2
+            # リサンプリング
+            input_wave = soxr.resample(audio_data, inout_samplerate, inter_samplerate, 'VHQ')
+
+            # # ノイズ除去
+            # input_wave = denoise(input_wave)
+
+            # # 再リサンプリング
+            # input_wave = soxr.resample(input_wave, denoise_samplerate, inter_samplerate, 'VHQ')
+
+            # # メルスペクトログラムに変換
+            # input_mel = get_mel_torch(input_wave[None])
+
+            # # 声質変換
+            # ref_emb_key = 'zundamon127'
+            # output_mel = conversion(input_mel, ref_emb_key)
+
+            # # 最終的な音声生成
+            # output_wave = inference_hg(output_mel).cpu().numpy()[0]
+
+            # リサンプリング
+            converted_audio_data = soxr.resample(input_wave, inter_samplerate, inout_samplerate, 'VHQ')
             converted_audio_data = converted_audio_data.astype(np.int16)
 
             # 変換後の音声データを送信
