@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+const ZUNDA_DEFAULT_IMAGE="./zundamon_.png"
+const ZUNDA_SELECTED_IMAGE="./zundamon_selected.png"
+
 const Audio: React.FC = () => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [audioInput, setAudioInput] = useState<MediaStream | null>(null);
@@ -8,7 +11,7 @@ const Audio: React.FC = () => {
   const bufferQueueRef = useRef<Float32Array[]>([]);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8765');
+    const ws = new WebSocket('ws://192.168.101.200:8765');
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
       console.log('WebSocket connection established');
@@ -89,6 +92,12 @@ const Audio: React.FC = () => {
     }
   };
 
+  const sendValue = (value: number) => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'value', data: value }));
+    }
+  };
+
   const playAudio = (buffer: ArrayBuffer) => {
     if (buffer.byteLength === 0) {
       console.error('Received empty buffer');
@@ -119,8 +128,40 @@ const Audio: React.FC = () => {
     source.start(0);
   };
 
+  // ================================
+  const [currentId, setCurrentId] = useState<number>(1);
+  const [id1Selected, setid1Selected] = useState<boolean>(false);
+  const [id2Selected, setid2Selected] = useState<boolean>(false);
+  const [id3Selected, setid3Selected] = useState<boolean>(false);
+
   return (
     <div>
+      <div id="button-container">
+        <img
+            id={currentId === 1 ? "selected-button-icon" : "button-icon"}
+            onMouseEnter={() => setid1Selected(true)}
+            onMouseLeave={() => setid1Selected(false)}
+            onClick={() => {setCurrentId(1);sendValue(1);console.log("ID1 Selected!!")}}
+            src={id1Selected ? ZUNDA_SELECTED_IMAGE : ZUNDA_DEFAULT_IMAGE}
+            alt="id 1"
+        />
+        <img
+            id={currentId === 2 ? "selected-button-icon" : "button-icon"}
+            onMouseEnter={() => setid2Selected(true)}
+            onMouseLeave={() => setid2Selected(false)}
+            onClick={() => {setCurrentId(2);sendValue(2);console.log("ID2 Selected!!")}}
+            src={id2Selected ? ZUNDA_SELECTED_IMAGE : ZUNDA_DEFAULT_IMAGE}
+            alt="id 2"
+        />
+        <img
+            id={currentId === 3 ? "selected-button-icon" : "button-icon"}
+            onMouseEnter={() => setid3Selected(true)}
+            onMouseLeave={() => setid3Selected(false)}
+            onClick={() => {setCurrentId(3);sendValue(3);console.log("ID3 Selected!!")}}
+            src={id3Selected ? ZUNDA_SELECTED_IMAGE : ZUNDA_DEFAULT_IMAGE}
+            alt="id 3"
+        />
+      </div>
       <h1>WebSocket Audio Conversion</h1>
       <button onClick={startRecording}>Start Recording</button>
       <button onClick={stopRecording}>Stop Recording</button>
