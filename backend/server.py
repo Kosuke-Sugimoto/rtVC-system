@@ -4,6 +4,7 @@ import numpy as np
 from flask import Flask, send_from_directory
 import torch
 import soxr
+import json
 
 app = Flask(__name__, static_folder='client/build')
 
@@ -16,38 +17,69 @@ def static_proxy(path):
     return send_from_directory(app.static_folder, path)
 
 async def audio_conversion(websocket, path):
+    global conversion_index
     try:
         async for message in websocket:
-            audio_data = np.frombuffer(message, dtype=np.int16).astype(np.float32)
-            inout_samplerate = 48000
-            denoise_samplerate = 16000
-            inter_samplerate = inout_samplerate // 2
+            if isinstance(message, str):
+                data = json.loads(message)
+                if data['type'] == 'value':
+                    conversion_index = data['data']
+                    print(f"Conversion index set to: {conversion_index}")
+            else:
+                audio_data = np.frombuffer(message, dtype=np.int16)
+                print(f"Received data: {audio_data}")
 
-            # リサンプリング
-            input_wave = soxr.resample(audio_data, inout_samplerate, inter_samplerate, 'VHQ')
+                # インデックスに基づいた音声変換処理（例：単純な増幅）
+                converted_audio_data = audio_data * conversion_index
+                converted_audio_data = converted_audio_data.astype(np.int16)
+                
+                await websocket.send(converted_audio_data.tobytes())
+    except websockets.ConnectionClosedError as e:
+        print(f"Connection closed with error: {e}")
+    except Exception as e:
+        print(f"Error during audio conversion: {e}")
 
-            # # ノイズ除去
-            # input_wave = denoise(input_wave)
 
-            # # 再リサンプリング
-            # input_wave = soxr.resample(input_wave, denoise_samplerate, inter_samplerate, 'VHQ')
+async def audio_conversion(websocket, path):
+    try:
+        async for message in websocket:
+            print(message)
+            if isinstance(message, str):
+                data = json.loads(message)
+                if data['type'] == 'value':
+                    conversion_index = data['data']
+                    print(f"Conversion index set to: {conversion_index}")
+            else:
+                audio_data = np.frombuffer(message, dtype=np.int16).astype(np.float32)
+                inout_samplerate = 48000
+                denoise_samplerate = 16000
+                inter_samplerate = inout_samplerate // 2
 
-            # # メルスペクトログラムに変換
-            # input_mel = get_mel_torch(input_wave[None])
+                # リサンプリング
+                input_wave = soxr.resample(audio_data, inout_samplerate, inter_samplerate, 'VHQ')
 
-            # # 声質変換
-            # ref_emb_key = 'zundamon127'
-            # output_mel = conversion(input_mel, ref_emb_key)
+                # # ノイズ除去
+                # input_wave = denoise(input_wave)
 
-            # # 最終的な音声生成
-            # output_wave = inference_hg(output_mel).cpu().numpy()[0]
+                # # 再リサンプリング
+                # input_wave = soxr.resample(input_wave, denoise_samplerate, inter_samplerate, 'VHQ')
 
-            # リサンプリング
-            converted_audio_data = soxr.resample(input_wave, inter_samplerate, inout_samplerate, 'VHQ')
-            converted_audio_data = converted_audio_data.astype(np.int16)
+                # # メルスペクトログラムに変換
+                # input_mel = get_mel_torch(input_wave[None])
 
-            # 変換後の音声データを送信
-            await websocket.send(converted_audio_data.tobytes())
+                # # 声質変換
+                # ref_emb_key = 'zundamon127'
+                # output_mel = conversion(input_mel, ref_emb_key)
+
+                # # 最終的な音声生成
+                # output_wave = inference_hg(output_mel).cpu().numpy()[0]
+
+                # リサンプリング
+                converted_audio_data = soxr.resample(input_wave, inter_samplerate, inout_samplerate, 'VHQ')
+                converted_audio_data = converted_audio_data.astype(np.int16)
+
+                # 変換後の音声データを送信
+                await websocket.send(converted_audio_data.tobytes())
     except websockets.ConnectionClosedError as e:
         print(f"Connection closed with error: {e}")
     except Exception as e:
