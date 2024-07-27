@@ -1,0 +1,38 @@
+name: formatter-github-actions
+
+run-name: Python Formatter
+
+on: [push]
+
+jobs:
+  formatter:
+    name: formatter
+    runs-on: ubuntu-latest
+    strategy: # どゆこと？
+      matrix:
+        python-version: [3.9]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }} # どゆこと？
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install autoflake black isort
+      - name: autoflake
+        run: autoflake -r .
+      - name: black
+        run: black .
+      - name: isort
+        run: isort .
+      - name: Auto Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Apply Code Formatter
