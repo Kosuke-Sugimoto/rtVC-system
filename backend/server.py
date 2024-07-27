@@ -9,7 +9,8 @@ import uuid
 import cv2
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder, MediaRelay
+from aiortc.contrib.media import (MediaBlackhole, MediaPlayer, MediaRecorder,
+                                  MediaRelay)
 from av import AudioFrame
 
 ROOT = os.path.dirname(__file__)
@@ -31,7 +32,7 @@ class AudioTransformTrack(MediaStreamTrack):
         self.track = track
 
     async def recv(self):
-        frame = await self.track.recv() # frameはav.AudioFrame型
+        frame = await self.track.recv()  # frameはav.AudioFrame型
         new_frame = self.__transform(frame)
 
         return new_frame
@@ -57,6 +58,7 @@ class AudioTransformTrack(MediaStreamTrack):
         new_frame.time_base = frame.time_base
 
         return new_frame
+
 
 async def offer(request):
     """
@@ -87,7 +89,7 @@ async def offer(request):
     #  参考：https://aiortc.readthedocs.io/en/latest/helpers.html#aiortc.contrib.media.MediaBlackhole
     # Playerは'media source'、Recorderは'media sink'と書かれていたがこれはいったい…？
 
-    # TODO : 要らなさそうなら消す    
+    # TODO : 要らなさそうなら消す
     # player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
     # if args.record_to:
     #     recorder = MediaRecorder(args.record_to)
@@ -136,11 +138,7 @@ async def offer(request):
         log_info("Track %s received", track.kind)
 
         if track.kind == "audio":
-            pc.addTrack(
-                AudioTransformTrack(
-                    relay.subscribe(track)
-                )
-            )
+            pc.addTrack(AudioTransformTrack(relay.subscribe(track)))
 
         # TODO：要らなさそうなら消す
         # @track.on("ended")
@@ -165,6 +163,7 @@ async def offer(request):
             {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
         ),
     )
+
 
 async def on_shutdown(app):
     # close peer connections
