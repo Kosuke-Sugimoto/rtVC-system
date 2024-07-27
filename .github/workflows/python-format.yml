@@ -19,7 +19,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }} # どゆこと？
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Dependencies
@@ -27,11 +27,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install autoflake black isort
       - name: autoflake
-        run: autoflake -r .
+        run: autoflake --remove-all-unused-imports --remove-unused-variables --recursive --in-place backend --exclude=__init__.py
       - name: black
-        run: black .
+        run: black backend
       - name: isort
-        run: isort .
+        run: isort backend
       - name: Auto Commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
