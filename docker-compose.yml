@@ -1,0 +1,32 @@
+services:
+
+  frontend:
+    image: rtvc-fe:latest
+    build: ./frontend
+    tty: true
+    stdin_open: true
+    ipc: host
+    network_mode: host
+    volumes:
+      - type: bind
+        source: ./frontend
+        target: /work/
+
+  backend:
+    image: rtvc-be:latest
+    build: ./backend
+    tty: true
+    stdin_open: true
+    ipc: host
+    network_mode: host
+    volumes:
+      - type: bind
+        source: ./backend
+        target: /work/
+    deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all
+                capabilities: [gpu]
