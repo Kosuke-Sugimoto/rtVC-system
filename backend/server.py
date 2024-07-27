@@ -6,11 +6,9 @@ import os
 import ssl
 import uuid
 
-import cv2
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.contrib.media import (MediaBlackhole, MediaPlayer, MediaRecorder,
-                                  MediaRelay)
+from aiortc.contrib.media import MediaRelay
 from av import AudioFrame
 
 ROOT = os.path.dirname(__file__)
