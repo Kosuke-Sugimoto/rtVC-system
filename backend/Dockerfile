@@ -11,9 +11,11 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# 未確定のためrequirement.txtは使わない
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir \
         aiohttp \
+        aiohttp_cors \
         aiortc \
         soxr \
         sounddevice \
