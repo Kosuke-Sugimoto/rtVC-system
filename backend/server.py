@@ -6,8 +6,9 @@ import os
 import uuid
 
 from aiohttp import web
-from aiohttp_cors import setup, ResourceOptions
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
+from aiohttp_cors import ResourceOptions, setup
+from aiortc import (MediaStreamTrack, RTCIceCandidate, RTCPeerConnection,
+                    RTCSessionDescription)
 from aiortc.contrib.media import MediaRelay
 from av import AudioFrame
 
@@ -69,7 +70,9 @@ class AudioTransformTrack(MediaStreamTrack):
 
         npy_frame = frame.to_ndarray() * 2
 
-        new_frame = AudioFrame.from_ndarray(npy_frame, format=frame.format.name) # nameまで指定しないとオブジェクトのまま
+        new_frame = AudioFrame.from_ndarray(
+            npy_frame, format=frame.format.name
+        )  # nameまで指定しないとオブジェクトのまま
         new_frame.pts = frame.pts
         new_frame.time_base = frame.time_base
         new_frame.sample_rate = frame.sample_rate
@@ -133,7 +136,7 @@ async def offer(request):
             何やらICEに関してConnecting...のまま推移しない問題も発生するみたい
             https://github.com/aiortc/aiortc/issues/1084
             一応デフォルトのままやれば問題なさそうだが、細かく設定するとダメなのかな…？(読んだ当時では知識不足)
-            
+
             Connecting...のまま推移しない問題が発生したが、原因としてはクライアント側でsetRemoteDescriptionしていなかったことだった模様
             """
 
@@ -196,13 +199,13 @@ async def offer(request):
         # - https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/RTCIceCandidate
         # - https://github.com/aiortc/aiortc/issues/1084#:~:text=async%20def%20handle_candidate(,append(rtc_candidate)
         candidate = params["candidate"]
-        foundation = candidate["candidate"].split(' ')[0]
-        component = candidate["candidate"].split(' ')[1]
-        protocol = candidate["candidate"].split(' ')[2]
-        priority = candidate["candidate"].split(' ')[3]
-        ip = candidate["candidate"].split(' ')[4]
-        port = candidate["candidate"].split(' ')[5]
-        ctype = candidate["candidate"].split(' ')[7]
+        foundation = candidate["candidate"].split(" ")[0]
+        component = candidate["candidate"].split(" ")[1]
+        protocol = candidate["candidate"].split(" ")[2]
+        priority = candidate["candidate"].split(" ")[3]
+        ip = candidate["candidate"].split(" ")[4]
+        port = candidate["candidate"].split(" ")[5]
+        ctype = candidate["candidate"].split(" ")[7]
         ice_candidate = RTCIceCandidate(
             foundation=foundation,
             component=component,
@@ -212,12 +215,14 @@ async def offer(request):
             port=port,
             type=ctype,
             sdpMid=candidate["sdpMid"],
-            sdpMLineIndex=candidate["sdpMLineIndex"]
+            sdpMLineIndex=candidate["sdpMLineIndex"],
         )
         for pc in pcs:
             await pc.addIceCandidate(ice_candidate)
-        return web.Response(content_type="application/json", text=json.dumps({ "result": "success" }))
-    
+        return web.Response(
+            content_type="application/json", text=json.dumps({"result": "success"})
+        )
+
     else:
         return web.Response(status=400, text="Invalid request type")
 
@@ -247,25 +252,26 @@ if __name__ == "__main__":
 
     # Reactをビルドした後であればaiohttpで管理できるかも…？
     app = web.Application()
-    
+
     app.on_shutdown.append(on_shutdown)
-    
+
     # app.router.add_get("/", index)
     # app.router.add_get("/client.js", javascript)
     app.router.add_post("/offer", offer)
-    
+
     # 別ソースからのアクセスだとcorsでエラーを吐かれるのでここで設定
     # no-corsモードは制限が多いらしい(未調査)
-    cors = setup(app, defaults={
-        "*": ResourceOptions(
-            allow_credentials=True,
-            expose_headers="*",
-            allow_headers="*",
-        )
-    })
+    cors = setup(
+        app,
+        defaults={
+            "*": ResourceOptions(
+                allow_credentials=True,
+                expose_headers="*",
+                allow_headers="*",
+            )
+        },
+    )
     for route in list(app.router.routes()):
         cors.add(route)
-    
-    web.run_app(
-        app, access_log=None, host=args.host, port=args.port
-    )
+
+    web.run_app(app, access_log=None, host=args.host, port=args.port)
