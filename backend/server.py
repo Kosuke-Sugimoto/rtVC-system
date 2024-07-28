@@ -246,7 +246,7 @@ async def offer(request):
 
     elif params["type"] == "candidate":
         # paramsの中身一例
-        # {'type': 'candidate', 'candidate': {'candidate': 'candidate:244898170 1 tcp 1518217471 2404:7a82:6a0:d300:f11c:8e5f:36a2:6f78 9 typ host tcptype active generation 0 ufrag QBvn network-id 3', 'sdpMid': '0', 'sdpMLineIndex': 0, 'usernameFragment': 'QBvn'}}
+        # {'type': 'candidate', 'candidate': {'candidate': 'candidate:244898170 1 tcp 1518217471 ...(ip) 9 typ host tcptype active generation 0 ufrag QBvn network-id 3', 'sdpMid': '0', 'sdpMLineIndex': 0, 'usernameFragment': 'QBvn'}}
         # ローカルから取得したcandidate情報をそのまま入力してもタイプ不一致でエラーを吐かれる
         # そのためRTCIceCandidateクラスでラップする必要がある
         # 参考：
