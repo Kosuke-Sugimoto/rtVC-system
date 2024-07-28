@@ -4,8 +4,8 @@ import json
 import logging
 import os
 import uuid
-import numpy as np
 
+import numpy as np
 from aiohttp import web
 from aiohttp_cors import ResourceOptions, setup
 from aiortc import (MediaStreamTrack, RTCIceCandidate, RTCPeerConnection,
@@ -19,7 +19,7 @@ logger = logging.getLogger("pc")
 pcs = set()
 relay = MediaRelay()
 
-BUFFER_SIZE=8
+BUFFER_SIZE = 8
 buffer = []
 buffer_lock = asyncio.Lock()
 background_tasks = set()
@@ -61,11 +61,11 @@ class AudioTransformTrack(MediaStreamTrack):
         バッファへの書き込みと読み込みが別スレッドで存在する以上、とりあえずlockはかけておく
         参考：https://docs.python.org/ja/3/library/asyncio-sync.html#lock
         """
-        
+
         frame = await self.track.recv()  # frameはav.AudioFrame型
-        
+
         task = asyncio.create_task(self.__transform(frame))
-        
+
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)
 
@@ -114,17 +114,19 @@ class AudioTransformTrack(MediaStreamTrack):
         window = np.hanning(npy_frame.shape[0])
         npy_frame = np.multiply(npy_frame, window).astype(np.int16)
 
-        new_frame = AudioFrame.from_ndarray(npy_frame, format=frame.format.name) # nameまで指定しないとオブジェクトのまま
+        new_frame = AudioFrame.from_ndarray(
+            npy_frame, format=frame.format.name
+        )  # nameまで指定しないとオブジェクトのまま
         new_frame.pts = frame.pts
         new_frame.time_base = frame.time_base
         new_frame.sample_rate = frame.sample_rate
-        
+
         async with buffer_lock:
             buffer.append(new_frame)
 
     def __create_silent_frame(self, frame):
         # npy_frameは(1, 1920)、つまり、(1, sample数×channel数)
-        silent_data = np.zeros((1, frame.samples*2), dtype=np.int16)
+        silent_data = np.zeros((1, frame.samples * 2), dtype=np.int16)
         silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name)
         silent_frame.pts = frame.pts
         silent_frame.time_base = frame.time_base
