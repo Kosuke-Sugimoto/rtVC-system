@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import uuid
+import numpy as np
 
 from aiohttp import web
 from aiohttp_cors import setup, ResourceOptions
@@ -16,6 +17,11 @@ ROOT = os.path.dirname(__file__)
 logger = logging.getLogger("pc")
 pcs = set()
 relay = MediaRelay()
+
+BUFFER_SIZE=8
+buffer = []
+buffer_lock = asyncio.Lock()
+background_tasks = set()
 
 
 class AudioTransformTrack(MediaStreamTrack):
@@ -30,12 +36,45 @@ class AudioTransformTrack(MediaStreamTrack):
         self.track = track
 
     async def recv(self):
+        """
+        変換処理に時間がかかるため、メインでバッファへの登録をしつつ、裏で変換処理を回したい
+        　⇒変換処理を非同期処理にする & メインでawaitをさせない
+        　⇒変換が終わり次第バッファに登録するようにし、そのバッファの長さが規定値以上なら読み取り始める
+        　⇒それまでは無音のフレームを返しておく
+
+        以上のような機能(非同期処理の結果を待たないで処理を継続)は"fire and forget"と呼ばれている
+        Fire and Forgetについて
+        参考：
+        - https://qiita.com/eycjur/items/5e8df3549f6c069429dd#%E9%9D%9E%E5%90%8C%E6%9C%9F%E9%96%A2%E6%95%B0%E3%81%8B%E3%82%89%E9%9D%9E%E5%90%8C%E6%9C%9F%E9%96%A2%E6%95%B0%E3%82%92%E5%91%BC%E3%81%B6
+          ここにある通り、create_taskを使うことでタスクをスケジュール化(バックグラウンドに回す)できる
+        - https://qiita.com/eycjur/items/5e8df3549f6c069429dd#%E5%86%8D%E8%80%83%E5%90%8C%E6%9C%9F%E9%96%A2%E6%95%B0%E3%81%8B%E3%82%89%E5%90%8C%E6%9C%9F%E9%96%A2%E6%95%B0%E3%82%92%E5%91%BC%E3%81%B6fire-and-forget
+          同様の記事だが、ここでは'asyncio.new_event_loop().run_in_executor(None, 任意のタスク)'のように紹介されている
+          - 既にイベントループが存在する場合、新たに作成する必要はない(今回が該当)
+          - run_in_executorは同期処理の関数を非同期的に処理するためのメソッド(今回は不適当)
+            - 別スレッドで処理するためのものらしい
+        - https://docs.python.org/ja/3.10/library/asyncio-task.html#asyncio.create_task
+          公式にもcreate_taskは暗黙的にfire-and-forgetに使うものとしているみたい
+          ここに書いてある通り、完了していなくてもガベージコレクションされる恐れがあるっぽい
+          ⇒今回遅延が入りすぎると消されちゃう…？(とりまsetで参照は持たせておく)
+
+        バッファへの書き込みと読み込みが別スレッドで存在する以上、とりあえずlockはかけておく
+        参考：https://docs.python.org/ja/3/library/asyncio-sync.html#lock
+        """
+        
         frame = await self.track.recv()  # frameはav.AudioFrame型
-        new_frame = self.__transform(frame)
+        
+        task = asyncio.create_task(self.__transform(frame))
+        
+        background_tasks.add(task)
+        task.add_done_callback(background_tasks.discard)
 
-        return new_frame
+        if len(buffer) >= BUFFER_SIZE:
+            async with buffer_lock:
+                return buffer.pop(0)
+        else:
+            return self.__create_silent_frame(frame)
 
-    def __transform(self, frame):
+    async def __transform(self, frame):
         """
         pts, time_baseはAudioFrameの継承元であるav.frame.Frameのメンバ変数
         フレームの再生順序などを管理している
@@ -69,12 +108,28 @@ class AudioTransformTrack(MediaStreamTrack):
 
         npy_frame = frame.to_ndarray() * 2
 
+        await asyncio.sleep(1)
+
+        window = np.hanning(npy_frame.shape[0])
+        npy_frame = np.multiply(npy_frame, window).astype(np.int16)
+
         new_frame = AudioFrame.from_ndarray(npy_frame, format=frame.format.name) # nameまで指定しないとオブジェクトのまま
         new_frame.pts = frame.pts
         new_frame.time_base = frame.time_base
         new_frame.sample_rate = frame.sample_rate
+        
+        async with buffer_lock:
+            buffer.append(new_frame)
 
-        return new_frame
+    def __create_silent_frame(self, frame):
+        # npy_frameは(1, 1920)、つまり、(1, sample数×channel数)
+        silent_data = np.zeros((1, frame.samples*2), dtype=np.int16)
+        silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name)
+        silent_frame.pts = frame.pts
+        silent_frame.time_base = frame.time_base
+        silent_frame.sample_rate = frame.sample_rate
+
+        return silent_frame
 
 
 async def offer(request):
