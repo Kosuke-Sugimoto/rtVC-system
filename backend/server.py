@@ -3,7 +3,6 @@ import asyncio
 import json
 import logging
 import os
-import ssl
 import uuid
 
 from aiohttp import web
@@ -231,9 +230,7 @@ async def on_shutdown(app):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="WebRTC Server"
-    )
+    parser = argparse.ArgumentParser(description="WebRTC Server")
     parser.add_argument(
         "--host", default="0.0.0.0", help="Host for HTTP server (default: 0.0.0.0)"
     )
