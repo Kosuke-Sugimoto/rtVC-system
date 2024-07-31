@@ -6,6 +6,11 @@ import os
 import uuid
 
 import numpy as np
+import torch
+import soxr
+from frcrn import initialize_frcrn, denoise
+from hifigan_fix.inference_rt import initialize_hg, get_mel_torch, inference_hg
+from starganv2_vc.inference_rt import initialize_vc, conversion
 from aiohttp import web
 from aiohttp_cors import ResourceOptions, setup
 from aiortc import (MediaStreamTrack, RTCIceCandidate, RTCPeerConnection,
@@ -19,7 +24,8 @@ logger = logging.getLogger("pc")
 pcs = set()
 relay = MediaRelay()
 
-BUFFER_SIZE = 8
+MAX_WAV_VALUE = 32768
+BUFFER_SIZE = 2
 buffer = []
 buffer_lock = asyncio.Lock()
 background_tasks = set()
@@ -35,6 +41,33 @@ class AudioTransformTrack(MediaStreamTrack):
     def __init__(self, track):
         super().__init__()
         self.track = track
+        self.inout_samplerate = 48000
+        self.denoise_samplerate = 16000
+        self.inter_samplerate = 24000
+        h, device = initialize_hg('config_v1_mod_2.json', 'g_07180000_2')
+        initialize_vc(h, device, 'ita4jvs20_pre_alljp', 'epoch_00294.pth', 'ep50_200bat32lr5_alljp.pth', 'model')
+        self.stft_factor = 300
+        self.down_factor = 2
+        self.inter_size_vc = 80
+        self.inout_size_vc = self.inter_size_vc * self.stft_factor * self.down_factor
+        initialize_frcrn(device, int(self.inout_size_vc / self.inout_samplerate * self.denoise_samplerate))
+        self.nwarmup = 50
+        self.__warmup()
+
+    def __warmup(self):
+        print('Warm up...')
+        ref_emb_key = 'zundamon127'
+        with torch.no_grad():
+            for _ in range(self.nwarmup):
+                input_wave = np.random.random_sample((self.inout_size_vc,)).astype(np.float32)
+                input_wave = soxr.resample(input_wave, self.inout_samplerate, self.denoise_samplerate, 'VHQ')
+                input_wave = denoise(input_wave)
+                input_wave = soxr.resample(input_wave, self.denoise_samplerate, self.inter_samplerate, 'VHQ')
+                input_mel = get_mel_torch(input_wave[None])
+                output_mel = conversion(input_mel, ref_emb_key)
+                output_wave = inference_hg(output_mel).cpu().numpy()[0]
+                output_wave = soxr.resample(output_wave, self.inter_samplerate, self.inout_samplerate, 'VHQ')
+        print('Done.')
 
     async def recv(self):
         """
@@ -70,9 +103,11 @@ class AudioTransformTrack(MediaStreamTrack):
         task.add_done_callback(background_tasks.discard)
 
         if len(buffer) >= BUFFER_SIZE:
+            print("vc")
             async with buffer_lock:
                 return buffer.pop(0)
         else:
+            print("sil")
             return self.__create_silent_frame(frame)
 
     async def __transform(self, frame):
@@ -107,15 +142,20 @@ class AudioTransformTrack(MediaStreamTrack):
         - https://pyav.org/docs/develop/api/frame.html#av.frame.Frame
         """
 
-        npy_frame = frame.to_ndarray() * 2
+        npy_frame = frame.to_ndarray().astype(np.float32)
 
-        await asyncio.sleep(1)
+        if self.inout_samplerate != frame.sample_rate:
+            self.inout_samplerate = frame.sample_rate
 
-        window = np.hanning(npy_frame.shape[0])
-        npy_frame = np.multiply(npy_frame, window).astype(np.int16)
+        converted_npy_frame = self.__conversion(npy_frame)
+
+        # await asyncio.sleep(1)
+
+        window = np.hanning(converted_npy_frame.shape[0])
+        converted_npy_frame = np.multiply(converted_npy_frame, window).astype(np.int16)
 
         new_frame = AudioFrame.from_ndarray(
-            npy_frame, format=frame.format.name
+            converted_npy_frame, format=frame.format.name
         )  # nameまで指定しないとオブジェクトのまま
         new_frame.pts = frame.pts
         new_frame.time_base = frame.time_base
@@ -126,13 +166,57 @@ class AudioTransformTrack(MediaStreamTrack):
 
     def __create_silent_frame(self, frame):
         # npy_frameは(1, 1920)、つまり、(1, sample数×channel数)
-        silent_data = np.zeros((1, frame.samples * 2), dtype=np.int16)
+        silent_data = np.zeros((1, frame.samples), dtype=np.int16)
         silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name)
         silent_frame.pts = frame.pts
         silent_frame.time_base = frame.time_base
         silent_frame.sample_rate = frame.sample_rate
 
         return silent_frame
+
+    def __conversion(self, audio_data):
+        # リサンプリング
+        # audio_dataのshape：(1, 1920)
+        # soxr.resampleの要求：1D(mono) or 2D(frames, channels) array input
+        audio_data = audio_data.squeeze(axis=0)
+        audio_data /= MAX_WAV_VALUE
+
+        default_len = audio_data.shape[0]
+        wrapper_data = np.zeros(self.inout_size_vc, np.float32)
+        wrapper_data[:default_len] = audio_data
+        input_wave = soxr.resample(wrapper_data, self.inout_samplerate, self.denoise_samplerate, 'VHQ')
+
+        # ノイズ除去
+        input_wave = denoise(input_wave)
+
+        # input_wave /= MAX_WAV_VALUE
+
+        # 再リサンプリング
+        input_wave = soxr.resample(input_wave, self.denoise_samplerate, self.inter_samplerate, 'VHQ')
+
+        # メルスペクトログラムに変換
+        input_mel = get_mel_torch(input_wave[None])
+
+        # 声質変換
+        # ref_emb_key = 'zundamon127'
+        # output_mel = conversion(input_mel, ref_emb_key)
+
+        # 最終的な音声生成
+        # output_wave = inference_hg(output_mel).cpu().detach().numpy()[0]
+        output_wave = inference_hg(input_mel).cpu().detach().numpy()[0]
+        output_wave = output_wave[:default_len]
+
+        # リサンプリング
+        converted_audio_data = soxr.resample(output_wave, self.inter_samplerate, self.inout_samplerate, 'VHQ')
+        converted_audio_data = np.expand_dims(converted_audio_data, axis=0) # = torch.unsqeeze
+        converted_audio_data *= MAX_WAV_VALUE
+        converted_audio_data = converted_audio_data.astype(np.int16)
+        
+        # vad_threshold = 0.00005
+        # if np.average(np.power(input_wave[:default_len], 2)) < vad_threshold:
+        #     converted_audio_data.fill(0)
+
+        return converted_audio_data
 
 
 async def offer(request):
