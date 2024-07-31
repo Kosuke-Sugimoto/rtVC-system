@@ -6,17 +6,17 @@ import os
 import uuid
 
 import numpy as np
-import torch
 import soxr
-from frcrn import initialize_frcrn, denoise
-from hifigan_fix.inference_rt import initialize_hg, get_mel_torch, inference_hg
-from starganv2_vc.inference_rt import initialize_vc, conversion
+import torch
 from aiohttp import web
 from aiohttp_cors import ResourceOptions, setup
 from aiortc import (MediaStreamTrack, RTCIceCandidate, RTCPeerConnection,
                     RTCSessionDescription)
 from aiortc.contrib.media import MediaRelay
 from av import AudioFrame
+from frcrn import denoise, initialize_frcrn
+from hifigan_fix.inference_rt import get_mel_torch, inference_hg, initialize_hg
+from starganv2_vc.inference_rt import conversion, initialize_vc
 
 ROOT = os.path.dirname(__file__)
 
@@ -44,30 +44,48 @@ class AudioTransformTrack(MediaStreamTrack):
         self.inout_samplerate = 48000
         self.denoise_samplerate = 16000
         self.inter_samplerate = 24000
-        h, device = initialize_hg('config_v1_mod_2.json', 'g_07180000_2')
-        initialize_vc(h, device, 'ita4jvs20_pre_alljp', 'epoch_00294.pth', 'ep50_200bat32lr5_alljp.pth', 'model')
+        h, device = initialize_hg("config_v1_mod_2.json", "g_07180000_2")
+        initialize_vc(
+            h,
+            device,
+            "ita4jvs20_pre_alljp",
+            "epoch_00294.pth",
+            "ep50_200bat32lr5_alljp.pth",
+            "model",
+        )
         self.stft_factor = 300
         self.down_factor = 2
         self.inter_size_vc = 80
         self.inout_size_vc = self.inter_size_vc * self.stft_factor * self.down_factor
-        initialize_frcrn(device, int(self.inout_size_vc / self.inout_samplerate * self.denoise_samplerate))
+        initialize_frcrn(
+            device,
+            int(self.inout_size_vc / self.inout_samplerate * self.denoise_samplerate),
+        )
         self.nwarmup = 50
         self.__warmup()
 
     def __warmup(self):
-        print('Warm up...')
-        ref_emb_key = 'zundamon127'
+        print("Warm up...")
+        ref_emb_key = "zundamon127"
         with torch.no_grad():
             for _ in range(self.nwarmup):
-                input_wave = np.random.random_sample((self.inout_size_vc,)).astype(np.float32)
-                input_wave = soxr.resample(input_wave, self.inout_samplerate, self.denoise_samplerate, 'VHQ')
+                input_wave = np.random.random_sample((self.inout_size_vc,)).astype(
+                    np.float32
+                )
+                input_wave = soxr.resample(
+                    input_wave, self.inout_samplerate, self.denoise_samplerate, "VHQ"
+                )
                 input_wave = denoise(input_wave)
-                input_wave = soxr.resample(input_wave, self.denoise_samplerate, self.inter_samplerate, 'VHQ')
+                input_wave = soxr.resample(
+                    input_wave, self.denoise_samplerate, self.inter_samplerate, "VHQ"
+                )
                 input_mel = get_mel_torch(input_wave[None])
                 output_mel = conversion(input_mel, ref_emb_key)
                 output_wave = inference_hg(output_mel).cpu().numpy()[0]
-                output_wave = soxr.resample(output_wave, self.inter_samplerate, self.inout_samplerate, 'VHQ')
-        print('Done.')
+                output_wave = soxr.resample(
+                    output_wave, self.inter_samplerate, self.inout_samplerate, "VHQ"
+                )
+        print("Done.")
 
     async def recv(self):
         """
@@ -184,7 +202,9 @@ class AudioTransformTrack(MediaStreamTrack):
         default_len = audio_data.shape[0]
         wrapper_data = np.zeros(self.inout_size_vc, np.float32)
         wrapper_data[:default_len] = audio_data
-        input_wave = soxr.resample(wrapper_data, self.inout_samplerate, self.denoise_samplerate, 'VHQ')
+        input_wave = soxr.resample(
+            wrapper_data, self.inout_samplerate, self.denoise_samplerate, "VHQ"
+        )
 
         # ノイズ除去
         input_wave = denoise(input_wave)
@@ -192,7 +212,9 @@ class AudioTransformTrack(MediaStreamTrack):
         # input_wave /= MAX_WAV_VALUE
 
         # 再リサンプリング
-        input_wave = soxr.resample(input_wave, self.denoise_samplerate, self.inter_samplerate, 'VHQ')
+        input_wave = soxr.resample(
+            input_wave, self.denoise_samplerate, self.inter_samplerate, "VHQ"
+        )
 
         # メルスペクトログラムに変換
         input_mel = get_mel_torch(input_wave[None])
@@ -207,11 +229,15 @@ class AudioTransformTrack(MediaStreamTrack):
         output_wave = output_wave[:default_len]
 
         # リサンプリング
-        converted_audio_data = soxr.resample(output_wave, self.inter_samplerate, self.inout_samplerate, 'VHQ')
-        converted_audio_data = np.expand_dims(converted_audio_data, axis=0) # = torch.unsqeeze
+        converted_audio_data = soxr.resample(
+            output_wave, self.inter_samplerate, self.inout_samplerate, "VHQ"
+        )
+        converted_audio_data = np.expand_dims(
+            converted_audio_data, axis=0
+        )  # = torch.unsqeeze
         converted_audio_data *= MAX_WAV_VALUE
         converted_audio_data = converted_audio_data.astype(np.int16)
-        
+
         # vad_threshold = 0.00005
         # if np.average(np.power(input_wave[:default_len], 2)) < vad_threshold:
         #     converted_audio_data.fill(0)
