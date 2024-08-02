@@ -253,7 +253,7 @@ async def offer(request):
         # - https://aiortc.readthedocs.io/en/latest/api.html#aiortc.RTCIceCandidate
         # - https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/RTCIceCandidate
         # - https://github.com/aiortc/aiortc/issues/1084#:~:text=async%20def%20handle_candidate(,append(rtc_candidate)
-        
+
         contents = params["candidate"]
         candidate = contents["candidate"]
         if candidate == "":
@@ -273,7 +273,7 @@ async def offer(request):
                 protocol="udp",
                 type="host",
                 sdpMid=contents["sdpMid"],
-                sdpMLineIndex=contents["sdpMLineIndex"]
+                sdpMLineIndex=contents["sdpMLineIndex"],
             )
         else:
             candidate_fragments = candidate.split(" ")
