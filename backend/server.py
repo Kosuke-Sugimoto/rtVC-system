@@ -144,14 +144,14 @@ class AudioTransformTrack(MediaStreamTrack):
 
         self.track.recv()にて得られるフレーム：
             av.AudioFrame pts=99840, 960 samples at 48000Hz, stereo, s16 at 0x7fe412bd0b20
-        
+
         ↑ のフレームをnumpyした時のshape:
             (1, 1920)
 
         関数本文のようにフレームを作成してみると、
             Layout mono :  <av.AudioFrame pts=None, 1920 samples at 0Hz, mono, s16 at 0x7fd6858fb880
             Layout stereo :  <av.AudioFrame pts=None, 960 samples at 0Hz, stereo, s16 at 0x7fd6858fb880
-        
+
         stereoの方で形状が一致しているのが見て取れる
         実際、コーディックのdefault設定で一度にやり取りされるオーディオの秒数も20msと決まっており、
             48000 * 0.02 = 960
@@ -164,11 +164,11 @@ class AudioTransformTrack(MediaStreamTrack):
         ⇒ 確認によればchannelCountは設定できているっぽいからコーデックが悪さをしている…？
 
         ※ var(track)にて得られた出力：
-            {'_events': {}, '_lock': <unlocked _thread.lock object at 0x7f6514ed5000>, '_loop': None, '_waiting': set(), '_MediaStreamTrack__ended': False, 
-            '_id': '3e24f638-7ca0-43c8-9944-836a43525a2d', 'kind': 'audio', '_relay': <aiortc.contrib.media.MediaRelay object at 0x7f6546fa69b0>, 
-            '_source': <aiortc.rtcrtpreceiver.RemoteStreamTrack object at 0x7f6514ed8490>, '_buffered': True, '_frame': None, 
+            {'_events': {}, '_lock': <unlocked _thread.lock object at 0x7f6514ed5000>, '_loop': None, '_waiting': set(), '_MediaStreamTrack__ended': False,
+            '_id': '3e24f638-7ca0-43c8-9944-836a43525a2d', 'kind': 'audio', '_relay': <aiortc.contrib.media.MediaRelay object at 0x7f6546fa69b0>,
+            '_source': <aiortc.rtcrtpreceiver.RemoteStreamTrack object at 0x7f6514ed8490>, '_buffered': True, '_frame': None,
             '_queue': <Queue at 0x7f6514ed8760 maxsize=0>, '_new_frame_event': None}
-        
+
         ※ MediaRelayの大元のオブジェクトのrecvメソッド:
             https://github.com/aiortc/aiortc/blob/a9449820f745e63316b57914b2f1fa7c07f54d9a/src/aiortc/rtcrtpreceiver.py#L196
 
@@ -178,7 +178,10 @@ class AudioTransformTrack(MediaStreamTrack):
         a = np.zeros((1, 1920), dtype=np.int16)
         b = np.zeros((1, 1920), dtype=np.int16)
         print("Layout mono : ", AudioFrame.from_ndarray(a, format="s16", layout="mono"))
-        print("Layout stereo : ", AudioFrame.from_ndarray(b, format="s16", layout="stereo"))
+        print(
+            "Layout stereo : ",
+            AudioFrame.from_ndarray(b, format="s16", layout="stereo"),
+        )
 
 
 async def offer(request):
