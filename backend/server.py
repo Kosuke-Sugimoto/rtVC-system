@@ -253,25 +253,48 @@ async def offer(request):
         # - https://aiortc.readthedocs.io/en/latest/api.html#aiortc.RTCIceCandidate
         # - https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/RTCIceCandidate
         # - https://github.com/aiortc/aiortc/issues/1084#:~:text=async%20def%20handle_candidate(,append(rtc_candidate)
-        candidate = params["candidate"]
-        foundation = candidate["candidate"].split(" ")[0]
-        component = candidate["candidate"].split(" ")[1]
-        protocol = candidate["candidate"].split(" ")[2]
-        priority = candidate["candidate"].split(" ")[3]
-        ip = candidate["candidate"].split(" ")[4]
-        port = candidate["candidate"].split(" ")[5]
-        ctype = candidate["candidate"].split(" ")[7]
-        ice_candidate = RTCIceCandidate(
-            foundation=foundation,
-            component=component,
-            protocol=protocol,
-            priority=priority,
-            ip=ip,
-            port=port,
-            type=ctype,
-            sdpMid=candidate["sdpMid"],
-            sdpMLineIndex=candidate["sdpMLineIndex"],
-        )
+        
+        contents = params["candidate"]
+        candidate = contents["candidate"]
+        if candidate == "":
+            # 空のcandidateはICEの収集が終わったことを示す特殊なもの
+            # FireFoxの場合、これが送信される(Chromeは暗黙的に無視される)
+            # aiortcではparseして自分でオブジェクトを生成する必要がある
+            # ⇒ 適当な値を入力しておく(多分大事なのはfoundation="")
+            # 参考
+            # - https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/candidate#value
+            # - https://stackoverflow.com/questions/67993490/webrtc-empty-string-in-icecandidate
+            ice_candidate = RTCIceCandidate(
+                component=1,
+                foundation="",
+                ip="0.0.0.0",
+                port="0",
+                priority="0",
+                protocol="udp",
+                type="host",
+                sdpMid=contents["sdpMid"],
+                sdpMLineIndex=contents["sdpMLineIndex"]
+            )
+        else:
+            candidate_fragments = candidate.split(" ")
+            foundation = candidate_fragments[0]
+            component = candidate_fragments[1]
+            protocol = candidate_fragments[2]
+            priority = candidate_fragments[3]
+            ip = candidate_fragments[4]
+            port = candidate_fragments[5]
+            ctype = candidate_fragments[7]
+            ice_candidate = RTCIceCandidate(
+                foundation=foundation,
+                component=component,
+                protocol=protocol,
+                priority=priority,
+                ip=ip,
+                port=port,
+                type=ctype,
+                sdpMid=contents["sdpMid"],
+                sdpMLineIndex=contents["sdpMLineIndex"],
+            )
         for pc in pcs:
             await pc.addIceCandidate(ice_candidate)
         return web.Response(
