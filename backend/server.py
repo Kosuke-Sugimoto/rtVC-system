@@ -107,7 +107,11 @@ class AudioTransformTrack(MediaStreamTrack):
         - https://pyav.org/docs/develop/api/frame.html#av.frame.Frame
         """
 
-        npy_frame = frame.to_ndarray() * 2
+        npy_frame = frame.to_ndarray()
+        print(frame)
+        print(frame.planes)
+
+        # self.__experiment()
 
         await asyncio.sleep(1)
 
@@ -125,7 +129,6 @@ class AudioTransformTrack(MediaStreamTrack):
             buffer.append(new_frame)
 
     def __create_silent_frame(self, frame):
-        # npy_frameは(1, 1920)、つまり、(1, sample数×channel数)
         silent_data = np.zeros((1, frame.samples * 2), dtype=np.int16)
         silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name)
         silent_frame.pts = frame.pts
@@ -133,6 +136,49 @@ class AudioTransformTrack(MediaStreamTrack):
         silent_frame.sample_rate = frame.sample_rate
 
         return silent_frame
+
+    def __experiment(self):
+        """
+        そもそもの問題点として、recvにてself.track.recv()したフレームが持つlayoutがstereoとなってしまっている
+        それでもモノラルになっているかもしれないと思ったため調査
+
+        self.track.recv()にて得られるフレーム：
+            av.AudioFrame pts=99840, 960 samples at 48000Hz, stereo, s16 at 0x7fe412bd0b20
+        
+        ↑ のフレームをnumpyした時のshape:
+            (1, 1920)
+
+        関数本文のようにフレームを作成してみると、
+            Layout mono :  <av.AudioFrame pts=None, 1920 samples at 0Hz, mono, s16 at 0x7fd6858fb880
+            Layout stereo :  <av.AudioFrame pts=None, 960 samples at 0Hz, stereo, s16 at 0x7fd6858fb880
+        
+        stereoの方で形状が一致しているのが見て取れる
+        実際、コーディックのdefault設定で一度にやり取りされるオーディオの秒数も20msと決まっており、
+            48000 * 0.02 = 960
+        よりサンプル数も合致していることが分かる
+
+        以上より、最初のTrackから取得する段階でステレオとして認識されていることは間違いなさそう
+        ⇒ recvのスクリプトを弄ってmonoにできないか？
+        ⇒ 思ったよりも深いところでAudioFrameの設定はされていそう（…というか、サーバー側では形状に関して関知していないのでは…？
+        ⇒ ということはクライアント側に問題があるのか？
+        ⇒ 確認によればchannelCountは設定できているっぽいからコーデックが悪さをしている…？
+
+        ※ var(track)にて得られた出力：
+            {'_events': {}, '_lock': <unlocked _thread.lock object at 0x7f6514ed5000>, '_loop': None, '_waiting': set(), '_MediaStreamTrack__ended': False, 
+            '_id': '3e24f638-7ca0-43c8-9944-836a43525a2d', 'kind': 'audio', '_relay': <aiortc.contrib.media.MediaRelay object at 0x7f6546fa69b0>, 
+            '_source': <aiortc.rtcrtpreceiver.RemoteStreamTrack object at 0x7f6514ed8490>, '_buffered': True, '_frame': None, 
+            '_queue': <Queue at 0x7f6514ed8760 maxsize=0>, '_new_frame_event': None}
+        
+        ※ MediaRelayの大元のオブジェクトのrecvメソッド:
+            https://github.com/aiortc/aiortc/blob/a9449820f745e63316b57914b2f1fa7c07f54d9a/src/aiortc/rtcrtpreceiver.py#L196
+
+            見たところ、リモート側から送られているフレームを形状とかはそのままに流しているだけっぽい
+        """
+
+        a = np.zeros((1, 1920), dtype=np.int16)
+        b = np.zeros((1, 1920), dtype=np.int16)
+        print("Layout mono : ", AudioFrame.from_ndarray(a, format="s16", layout="mono"))
+        print("Layout stereo : ", AudioFrame.from_ndarray(b, format="s16", layout="stereo"))
 
 
 async def offer(request):
