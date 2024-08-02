@@ -16,7 +16,17 @@ export default function RealTimeIO() {
         // pc.addTrack以外にもカスタマイズの利くpc.addTransceiverがあるらしい
         // 参考：https://zenn.dev/yuki_uchida/books/c0946d19352af5/viewer/320c67
         navigator.mediaDevices
-            .getUserMedia({ video: false, audio: true })
+            .getUserMedia({
+                video: false,
+                audio: {
+                    channelCount: 1,
+                    sampleRate: 48000, // FireFoxはサポート外
+                    sampleSize: 16 // FireFoxはサポート外
+                    // 参考
+                    // https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackSettings/sampleSize
+                    // https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackSettings/sampleRate
+                }
+            })
             .then(async (stream) => {
                 stream.getAudioTracks().forEach(track => pc.addTrack(track, stream));
                 // ここじゃなきゃダメか…？
