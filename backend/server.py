@@ -167,13 +167,6 @@ async def offer(request):
         #  参考：https://aiortc.readthedocs.io/en/latest/helpers.html#aiortc.contrib.media.MediaBlackhole
         # Playerは'media source'、Recorderは'media sink'と書かれていたがこれはいったい…？
 
-        # TODO : 要らなさそうなら消す
-        # player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
-        # if args.record_to:
-        #     recorder = MediaRecorder(args.record_to)
-        # else:
-        #     recorder = MediaBlackhole()
-
         # pc.on(...)はイベントリスナー、callback関数を定義しそれを実行する
         @pc.on("datachannel")
         def on_datachannel(channel):
@@ -219,12 +212,6 @@ async def offer(request):
 
             if track.kind == "audio":
                 pc.addTrack(AudioTransformTrack(relay.subscribe(track)))
-
-            # TODO：要らなさそうなら消す
-            # @track.on("ended")
-            # async def on_ended():
-            #     log_info("Track %s ended", track.kind)
-            #     await recorder.stop()
 
         # SDP(Session Description Protocol)を設定する
         # remote: client, local: server (server.py視点)
