@@ -46,8 +46,6 @@ export default function RealTimeIO() {
             await pc.setRemoteDescription(answer);
         };
 
-        // handleStartSession();
-
         return () => {
             if (pc) {
                 pc.close();
