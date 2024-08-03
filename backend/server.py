@@ -108,10 +108,6 @@ class AudioTransformTrack(MediaStreamTrack):
         """
 
         npy_frame = frame.to_ndarray()
-        print(frame)
-        print(frame.planes)
-
-        # self.__experiment()
 
         await asyncio.sleep(1)
 
@@ -119,18 +115,40 @@ class AudioTransformTrack(MediaStreamTrack):
         npy_frame = np.multiply(npy_frame, window).astype(np.int16)
 
         new_frame = AudioFrame.from_ndarray(
-            npy_frame, format=frame.format.name
+            npy_frame, format=frame.format.name, layout="stereo"
         )  # nameまで指定しないとオブジェクトのまま
         new_frame.pts = frame.pts
         new_frame.time_base = frame.time_base
         new_frame.sample_rate = frame.sample_rate
 
+        # ========== 調査用 ==========
+        # self.__experiment()
+        # npy_frame2 = frame.to_ndarray().reshape((2, -1))
+        # print(f"Left channel: {npy_frame2[0].shape}")
+        # print(f"Right channel: {npy_frame2[1].shape}")
+        # print(f"Channels are equal: {np.array_equal(npy_frame2[0], npy_frame2[1])}")
+        # # 平均値を取る方法だとエラーはないが、通常よりもかなり低い声で返される
+        # mono_frame = np.mean(npy_frame2, axis=0).astype(np.int16).reshape((1, -1))
+        # stereo_frame = np.concat([npy_frame[0], npy_frame[0].copy()]).reshape((1, -1))
+        # stereo_frame_mix = np.mean(npy_frame2, axis=0).astype(np.int16).reshape((1, -1))
+        # new_frame2 = AudioFrame.from_ndarray(
+        #     stereo_frame, format=frame.format.name, layout="stereo" # or mono
+        # )
+        # new_frame2.pts = frame.pts
+        # new_frame2.time_base = frame.time_base
+        # new_frame2.sample_rate = frame.sample_rate
+        # =============================
+
         async with buffer_lock:
             buffer.append(new_frame)
 
-    def __create_silent_frame(self, frame):
-        silent_data = np.zeros((1, frame.samples * 2), dtype=np.int16)
-        silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name)
+    def __create_silent_frame(self, frame, stereo=True):
+        samples = frame.samples * 2 if stereo else frame.samples
+        layout = "stereo" if stereo else "mono"
+
+        silent_data = np.zeros((1, samples), dtype=np.int16)
+        silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name, layout=layout)
+        
         silent_frame.pts = frame.pts
         silent_frame.time_base = frame.time_base
         silent_frame.sample_rate = frame.sample_rate
