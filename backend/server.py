@@ -147,8 +147,10 @@ class AudioTransformTrack(MediaStreamTrack):
         layout = "stereo" if stereo else "mono"
 
         silent_data = np.zeros((1, samples), dtype=np.int16)
-        silent_frame = AudioFrame.from_ndarray(silent_data, format=frame.format.name, layout=layout)
-        
+        silent_frame = AudioFrame.from_ndarray(
+            silent_data, format=frame.format.name, layout=layout
+        )
+
         silent_frame.pts = frame.pts
         silent_frame.time_base = frame.time_base
         silent_frame.sample_rate = frame.sample_rate
