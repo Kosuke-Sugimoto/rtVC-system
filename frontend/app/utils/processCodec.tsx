@@ -15,8 +15,8 @@ export function setMonoCodec(sdp: string): string {
             const codecName = match[2];
             const channels = match[4];
 
-            // モノラルに対応していないコーデックを除去
-            if (!monoSupportedCodecs.includes(codecName) || (channels && channels !== '1')) {
+            // モノラルに対応していないコーデックを除去。ただし、Opusは除外
+            if (codecName !== 'opus' && (!monoSupportedCodecs.includes(codecName) || (channels && channels !== '1'))) {
                 removePayloadTypes.push(payloadType);
             } else {
                 validPayloadTypes.push(payloadType);
@@ -149,4 +149,21 @@ export function preferCodec(sdp: string, codec: string): string {
     }
 
     return sdpLines.join('\r\n');
+}
+
+export function modifyOpusParams(sdp: string, bitrate: number, channels: number): string {
+    // Opusに関する行を検索し、ビットレート、CBR、モノラルを設定
+    sdp = sdp.replace(/a=fmtp:111 .*\r\n/g, `a=fmtp:111 minptime=10; useinbandfec=1; maxaveragebitrate=${bitrate}; cbr=1; stereo=${channels === 2 ? 1 : 0}\r\n`);
+    return sdp;
+}
+
+// 結合された関数
+export function setOpusCBRMono(sdp: string, bitrate: number): string {
+    // まず、モノラル対応のコーデックを設定。ただし、Opusは除外
+    sdp = setMonoCodec(sdp);
+
+    // 次に、Opusコーデックのビットレートとモノラル設定を行う
+    sdp = modifyOpusParams(sdp, bitrate, 1);
+
+    return sdp;
 }

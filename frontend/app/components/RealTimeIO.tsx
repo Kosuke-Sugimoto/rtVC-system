@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { preferCodec, setAudioCodec, setMonoCodec } from "~/utils/processCodec";
+import { preferCodec, setAudioCodec, setMonoCodec, setOpusCBRMono } from "~/utils/processCodec";
 import { sendToRemotePeer } from "~/utils/sendToRemotePeer";
 
 export default function RealTimeIO() {
@@ -63,10 +63,12 @@ export default function RealTimeIO() {
             console.log(offer.sdp);
             // offer.sdp = setAudioCodec(offer.sdp!, false);
             // console.log(offer.sdp);
-            offer.sdp = setMonoCodec(offer.sdp!);
-            console.log(offer.sdp);
-            offer.sdp = preferCodec(offer.sdp, "G722")
-            console.log(offer.sdp);
+            // offer.sdp = setMonoCodec(offer.sdp!);
+            // console.log(offer.sdp);
+            // offer.sdp = preferCodec(offer.sdp!, "G722")
+            // console.log(offer.sdp);
+            // offer.sdp = setOpusCBRMono(offer.sdp!, 64000);
+            // console.log(offer.sdp);
             await pc.setLocalDescription(offer);
             const response = await sendToRemotePeer({ type: "offer", sdp: offer.sdp });
             const answer = await response.json()
